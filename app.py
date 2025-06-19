@@ -4,6 +4,9 @@ import re
 import nltk
 from PIL import Image
 import time
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+from collections import Counter
 
 # Download required NLTK data
 nltk.download('punkt')
@@ -75,12 +78,79 @@ category_mapping = dict(zip(le.transform(le.classes_), le.classes_))
 
 cat = ['Advocate', 'Arts', 'Automation Testing', 'Blockchain', 'Business Analyst', 'Civil Engineer', 'Data Science', 'Database', 'DevOps Engineer', 'DotNet Developer', 'ETL Developer', 'Electrical Engineering', 'HR', 'Hadoop', 'Health and fitness', 'Java Developer', 'Mechanical Engineer', 'Network Security Engineer', 'Operations Manager', 'PMO', 'Python Developer', 'SAP Developer', 'Sales', 'Testing', 'Web Designing']
 
+# Dictionary of essential keywords for each category
+category_keywords = {
+    'Advocate': ['law', 'legal', 'litigation', 'counsel', 'attorney', 'court', 'jurisdiction', 'compliance', 'contract', 'regulatory', 'rights', 'judicial'],
+    'Arts': ['creative', 'design', 'artist', 'portfolio', 'illustration', 'media', 'composition', 'visual', 'artistic', 'exhibition', 'studio', 'creative direction'],
+    'Automation Testing': ['selenium', 'testing', 'automation', 'test cases', 'qa', 'quality assurance', 'junit', 'testng', 'jenkins', 'ci/cd', 'regression testing'],
+    'Blockchain': ['blockchain', 'cryptocurrency', 'smart contracts', 'solidity', 'ethereum', 'bitcoin', 'web3', 'defi', 'consensus', 'distributed ledger'],
+    'Business Analyst': ['analysis', 'requirements', 'business process', 'stakeholder', 'documentation', 'agile', 'scrum', 'user stories', 'brd', 'reporting'],
+    'Civil Engineer': ['construction', 'structural', 'autocad', 'project planning', 'site supervision', 'estimation', 'blueprint', 'building codes', 'surveying'],
+    'Data Science': ['python', 'machine learning', 'data analysis', 'statistics', 'sql', 'pandas', 'numpy', 'scikit-learn', 'tensorflow', 'visualization', 'big data'],
+    'Database': ['sql', 'database', 'oracle', 'mysql', 'postgresql', 'mongodb', 'nosql', 'queries', 'administration', 'data modeling', 'etl'],
+    'DevOps Engineer': ['docker', 'kubernetes', 'aws', 'ci/cd', 'jenkins', 'git', 'ansible', 'terraform', 'cloud', 'automation', 'linux', 'monitoring'],
+    'DotNet Developer': ['c#', '.net', 'asp.net', 'mvc', 'sql server', 'entity framework', 'web api', 'visual studio', 'linq', 'azure'],
+    'ETL Developer': ['etl', 'data warehouse', 'sql', 'informatica', 'talend', 'ssis', 'data integration', 'business intelligence', 'reporting'],
+    'Electrical Engineering': ['circuit design', 'power systems', 'electronics', 'plc', 'autocad', 'troubleshooting', 'control systems', 'schematics'],
+    'HR': ['recruitment', 'hiring', 'training', 'employee relations', 'benefits', 'hr policies', 'onboarding', 'talent management', 'compensation'],
+    'Hadoop': ['big data', 'mapreduce', 'hive', 'pig', 'spark', 'hdfs', 'yarn', 'hbase', 'cloudera', 'data processing', 'distributed computing'],
+    'Health and fitness': ['nutrition', 'fitness', 'training', 'health', 'wellness', 'exercise', 'diet', 'coaching', 'lifestyle', 'physiology'],
+    'Java Developer': ['java', 'spring', 'hibernate', 'j2ee', 'microservices', 'rest api', 'junit', 'maven', 'sql', 'web services'],
+    'Mechanical Engineer': ['cad', 'solidworks', 'product design', 'thermal', 'manufacturing', 'prototyping', 'gd&t', 'fea', 'quality control'],
+    'Network Security Engineer': ['cybersecurity', 'firewalls', 'network protocols', 'vpn', 'security tools', 'penetration testing', 'incident response', 'cisco'],
+    'Operations Manager': ['operations', 'team management', 'process improvement', 'project management', 'budget', 'leadership', 'strategy', 'kpi'],
+    'PMO': ['project management', 'pmp', 'risk management', 'stakeholder management', 'agile', 'scrum', 'program management', 'portfolio'],
+    'Python Developer': ['python', 'django', 'flask', 'api', 'web development', 'sql', 'git', 'rest', 'database', 'backend'],
+    'SAP Developer': ['sap', 'abap', 'erp', 'hana', 'fiori', 'modules', 'business processes', 'customization', 'implementation'],
+    'Sales': ['sales', 'business development', 'client relationship', 'negotiation', 'crm', 'account management', 'lead generation', 'closing'],
+    'Testing': ['manual testing', 'test cases', 'bug tracking', 'quality assurance', 'test plans', 'regression', 'functional testing', 'jira'],
+    'Web Designing': ['html', 'css', 'javascript', 'ui/ux', 'responsive design', 'photoshop', 'web design', 'wordpress', 'figma', 'adobe']
+}
+
 def clean_text(text):
     text = re.sub(r'http\S+|www\S+|https\S+', '', text)  # Remove URLs
     text = re.sub(r'@\w+|#', '', text)  # Remove mentions and hashtags
     text = re.sub(r'[^a-zA-Z\s]', '', text)  # Remove everything except letters and spaces
     text = re.sub(r'\s+', ' ', text)  # Normalize spaces
     return text.strip()
+
+def calculate_resume_score(text, category):
+    score = 0
+    max_score = 100
+    
+    # Convert text to lowercase for comparison
+    text = text.lower()
+    
+    if category in category_keywords:
+        keywords = category_keywords[category]
+        
+        # Calculate keyword presence score (50% of total score)
+        found_keywords = sum(1 for keyword in keywords if keyword in text)
+        keyword_score = (found_keywords / len(keywords)) * 50
+        
+        # Calculate content length score (20% of total score)
+        words = len(text.split())
+        length_score = min(20, (words / 500) * 20)  # Assume 500 words is optimal
+        
+        # Calculate keyword density score (30% of total score)
+        word_counts = Counter(text.split())
+        keyword_density = sum(word_counts[keyword.split()[-1]] for keyword in keywords if keyword.split()[-1] in word_counts)
+        density_score = min(30, (keyword_density / words) * 100)
+        
+        score = keyword_score + length_score + density_score
+        
+        # Create feedback messages
+        feedback = []
+        if keyword_score < 25:
+            feedback.append("⚠️ Consider adding more relevant keywords for this category")
+        if length_score < 10:
+            feedback.append("⚠️ Resume might be too short for a comprehensive evaluation")
+        if density_score < 15:
+            feedback.append("⚠️ Try to focus more on category-specific skills and experiences")
+        
+        return round(score, 2), feedback
+    
+    return 0, ["Category scoring not available"]
 
 def main():
     # Header section
@@ -119,20 +189,53 @@ def main():
                 input_features = tfidf.transform([cleaned_text])
                 prediction_id = knn.predict(input_features)[0]
                 
+                # Calculate resume score
+                resume_score, feedback = calculate_resume_score(cleaned_text, cat[prediction_id])
+                
                 # Show prediction with animation
                 time.sleep(1)  # Add slight delay for effect
                 st.success("Analysis Complete! 🎉")
-                
-                # Display result
+                  # Display result
                 st.markdown("<div class='result-section'>", unsafe_allow_html=True)
                 st.markdown("<h2 class='prediction-header'>Predicted Category</h2>", unsafe_allow_html=True)
                 st.markdown(f"<div class='big-category-text'>{cat[prediction_id]}</div>", unsafe_allow_html=True)
                 
+                # Calculate and display resume score
+                predicted_category = cat[prediction_id]
+                score, feedback = calculate_resume_score(cleaned_text, predicted_category)
+                
+                # Display score with gauge
+                st.markdown("<h3 style='color: white; text-align: center;'>Resume Score</h3>", unsafe_allow_html=True)
+                
+                # Create a colored score display
+                score_color = "#00ff88" if score >= 70 else "#ffd700" if score >= 50 else "#ff4b4b"
+                st.markdown(f"""
+                    <div style='text-align: center;'>
+                        <div style='font-size: 64px; color: {score_color}; font-weight: bold;'>
+                            {score}%
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Display feedback
+                if feedback:
+                    st.markdown("<h4 style='color: white; margin-top: 20px;'>Suggestions for Improvement:</h4>", unsafe_allow_html=True)
+                    for item in feedback:
+                        st.warning(item)
+                
                 # Show confidence info
                 st.info("""
-                    💡 This prediction is based on the content analysis of your resume. 
-                    Consider this as a guide for your job search and application process.
+                    💡 This prediction and score are based on content analysis of your resume. 
+                    The score reflects keyword matching, content length, and relevance to the predicted category.
                 """)
+                
+                # Display resume score
+                st.markdown(f"### Resume Score: {resume_score}/100")
+                
+                # Display feedback
+                for msg in feedback:
+                    st.markdown(f"- {msg}")
+                
                 st.markdown("</div>", unsafe_allow_html=True)
                 
             except Exception as e:
