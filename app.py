@@ -5,6 +5,7 @@ import nltk
 import time
 from collections import Counter
 import PyPDF2
+from resume_scoring import calculate_resume_score
 
 # Download required NLTK data
 nltk.download('punkt')
@@ -111,56 +112,6 @@ def clean_text(text):
     text = re.sub(r'[^a-zA-Z\s]', '', text)  # Remove everything except letters and spaces
     text = re.sub(r'\s+', ' ', text)  # Normalize spaces
     return text.strip()
-
-def calculate_resume_score(text, category):
-    if category == "Data Science":
-        return 81.54,[]
-    
-    
-    score = 0
-    max_score = 100
-    
-    # Convert text to lowercase for comparison
-    text = text.lower()
-    
-    if category in category_keywords:
-        keywords = category_keywords[category]
-        
-        # Calculate keyword presence score (45% of total score, very strict scoring)
-        found_keywords = sum(1 for keyword in keywords if keyword in text)
-        keyword_score = min(45, (found_keywords / (len(keywords) * 0.9)) * 45)  # Need 90% of keywords for max score
-        
-        # Calculate content length score (25% of total score, stricter)
-        words = len(text.split())
-        length_score = min(25, (words / 600) * 25)  # Increased to 600 words as optimal
-        
-        # Calculate keyword density score (25% of total score, stricter)
-        word_counts = Counter(text.split())
-        keyword_density = sum(word_counts[keyword.split()[-1]] for keyword in keywords if keyword.split()[-1] in word_counts)
-        density_score = min(25, (keyword_density / (words * 0.1)) * 25)  # Much stricter density requirement
-        
-        # Add bonus points for having key skills (up to 5 bonus points, harder to achieve)
-        bonus_score = min(5, found_keywords * 0.5)  # 0.5 points per keyword found, up to 5 points
-        
-        score = keyword_score + length_score + density_score + bonus_score
-          # Create feedback messages with stricter thresholds
-        feedback = []
-        if keyword_score < 25:
-            feedback.append("⚠️ Your resume needs more relevant keywords for this category")
-        if length_score < 15:
-            feedback.append("⚠️ Resume content length is below optimal - consider adding more detailed experience")
-        if density_score < 15:
-            feedback.append("⚠️ Keyword density is low - try to incorporate more category-specific terms")
-        
-        # Add positive feedback for good scores (stricter thresholds)
-        if score >= 85:
-            feedback.append("🌟 Outstanding match for this category!")
-        elif score >= 75:
-            feedback.append("✨ Strong match! A few improvements could make it exceptional")
-        
-        return round(score, 2), feedback
-    
-    return 0, ["Category scoring not available"]
 
 def main():
     # Header section
